@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, g
 from flask_wtf.csrf import CSRFProtect
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -8,18 +8,20 @@ db = SQLAlchemy()
 migrate = Migrate()
 
 # flask run -> create_app()
-def create_app():
+def create_app(config=None):
     print('run: create_app()')
     app = Flask(__name__)
 
-    app.config['SECRET_KEY'] = 'secret'
-    app.config['SESSION_COOKIE_NAME'] = 'gogglekaap'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:password@localhost/gogglekaap?charset=utf8'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    """ === Flask Configuration === """
+    from .configs import DevelopmentConfig, ProductionConfig
+    if not config:
+        if app.config['DEBUG']:
+            config = DevelopmentConfig()
+        else:
+            config = ProductionConfig()
 
-    if app.config['DEBUG'] == True:
-        app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 1
-        app.config['TEMPLATES_AUTO_RELOAD'] = True
+    print('run with: ', config)
+    app.config.from_object(config)
 
     """ === CSRF Init === """
     csrf.init_app(app)
@@ -31,14 +33,28 @@ def create_app():
     else:
         migrate.init_app(app, db)
 
+    """ === Restx Init === """
+    from .apis import blueprint as api
+    app.register_blueprint(api)
+
     """ === Routes Init === """
     from gogglekaap.routes import base_route, auth_route
     app.register_blueprint(base_route.bp)
     app.register_blueprint(auth_route.bp)
 
+    """ === Request hook === """
     @app.errorhandler(404)
     def page_404(error):
         return render_template('404.html'), 404
+
+    @app.before_request
+    def before_request():
+        g.db = db.session
+
+    @app.teardown_request
+    def teardown_request(exception):
+        if hasattr(g, 'db'):
+            g.db.close()
 
     # ''' === Method & Request context Practice === '''
     # from flask import request
