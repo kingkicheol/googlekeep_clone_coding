@@ -23,7 +23,7 @@ def test_delete_label(client):
     )
     assert r.status_code == 204
     r = client.get(
-        '/api/lables',
+        '/api/labels',
         follow_redirects=True
     )
     assert r.status_code == 200
